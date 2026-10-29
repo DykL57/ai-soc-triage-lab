@@ -1,0 +1,12 @@
+ip,hostname,zone,subnet,role,authorized_activity
+10.0.20.10,DC01,Zone 2 (LAN / servers),10.0.20.0/24,Domain controller (Tier 0),
+10.0.20.55,LAB,Zone 2 (LAN / servers),10.0.20.0/24,Lab admin workstation (physical host via VMnet3),RDP and SSH administration of lab systems
+10.0.20.100,SPLUNK01,Zone 2 (LAN / servers),10.0.20.0/24,SIEM (Splunk Enterprise),
+10.0.20.120,GREENBONE01,Zone 2 (LAN / servers),10.0.20.0/24,Vulnerability scanner (Greenbone),Authorized vulnerability scanning including default-credential checks
+10.0.20.121,ZABBIX01,Zone 2 (LAN / servers),10.0.20.0/24,Monitoring server (Zabbix),Receives Zabbix agent traffic on TCP 10051
+10.0.30.100,WIN-CL01,Zone 3 (OPT1 / workstations),10.0.30.0/24,Windows workstation,
+10.0.30.101,WIN-CL02,Zone 3 (OPT1 / workstations),10.0.30.0/24,Windows workstation,
+10.0.50.50,WIN-REDTEAM01,Zone 5,10.0.50.0/24,Red team host,Authorized attack simulation
+10.0.50.60,KALI-OPS01,Zone 5,10.0.50.0/24,Kali Linux attack host,Authorized attack simulation
+10.0.50.105,FILE-SRV01,Zone 5,10.0.50.0/24,File server,
+10.0.50.111,WIN-EDR01,Zone 5,10.0.50.0/24,EDR server,

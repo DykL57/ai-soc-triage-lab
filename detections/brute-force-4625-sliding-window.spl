@@ -1,0 +1,24 @@
+``` Brute force: more than 10 failed logons (4625) per account within any 5-minute sliding window.
+``` Data: index=win_dc, sourcetype=XmlWinEventLog (Universal Forwarder with renderXml=true).
+``` Validated in the lab on 2026-10-29 against the 2026-10-03 bursts (Eval 01, 02, 02b).
+``` Notes:
+```  - lower(user): Windows account names are case-insensitive (Administrator = administrator).
+```  - src_ip instead of IpAddress: IpAddress is extracted twice in this lab (duplicate multivalue).
+```  - streamstats time_window=5m needs events in time order (sort 0 _time).
+```  - Burst grouping: a new burst starts after a gap of more than 5 minutes; one row per incident.
+```  - The lookup adds asset context. 10.0.20.120 (GREENBONE01) is an authorized scanner: tune by
+```    scan window, not by a permanent IP exclusion.
+
+index=win_dc sourcetype=XmlWinEventLog EventCode=4625 user=* user!="-"
+| eval account=lower(user)
+| sort 0 _time
+| streamstats time_window=5m count as fails_5m by account
+| streamstats current=f last(_time) as prev_time by account
+| eval new_burst=if(isnull(prev_time) OR _time-prev_time>300, 1, 0)
+| streamstats sum(new_burst) as burst_id by account
+| stats count as total_failures max(fails_5m) as peak_fails_5m values(SubStatus) as substatus min(_time) as first_time max(_time) as last_time by account burst_id src_ip
+| where peak_fails_5m > 10
+| stats dc(account) as accounts_hit sum(total_failures) as failures values(substatus) as substatus min(first_time) as first_time max(last_time) as last_time by src_ip
+| lookup lab_assets.csv ip as src_ip OUTPUT hostname role zone authorized_activity
+| convert ctime(first_time) ctime(last_time)
+| sort - failures
