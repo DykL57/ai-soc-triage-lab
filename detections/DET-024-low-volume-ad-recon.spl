@@ -1,0 +1,33 @@
+``` DET-024 - Low-Volume Domain Recon by a Non-Privileged User (T1087.002 / T1069.002 / T1482)
+``` Saved search / report Title: "DET-024 - Low-Volume Domain Recon by Non-Privileged User"
+``` Written by Claude (cloud) as a detection engineer over Splunk MCP, 2026-10-30 (Eval 04).
+``` Fills the gap left by DET-022, which only fires on high-volume collection (>=100 conn/min, SharpHound-style).
+``` This catches low-and-slow native recon: a standard user running a few discovery LOLBins by hand.
+``` Validated against 7 days of lab data: fires on the 2026-10-30 09:19-09:22 bob.user chain (6 distinct tools,
+``` 5 domain-scope commands) and on nothing else.
+``` Notes:
+```  - 4688 here is XML-rendered: fields are NewProcessName, CommandLine, SubjectUserName, MandatoryLabel
+```    (NOT New_Process_Name / Process_Command_Line - the classic names return zero rows in this env).
+```  - Uses 4688, not Sysmon: the Sysmon ProcessCreate config is include-based and silently drops arp.exe and
+```    "nltest /trusted_domains" (see sysmon-processcreate-tuning.md). 4688 with command line is the complete source.
+```  - net1.exe is left out of the tool list: every net.exe spawns it, so counting it would double-count.
+```  - MandatoryLabel filter removes High (S-1-16-12288) and System (S-1-16-16384) integrity -> non-privileged only.
+```  - sort 0 ... _time before streamstats is required for the sliding window to evaluate correctly.
+```  - Threshold: >=3 distinct tools in 15m AND >=1 domain-scope command. The domain-scope requirement is what
+```    separates attacker recon from a user troubleshooting with ipconfig/arp.
+```  - Schedule every 10 min over the last 30 min (lookback > the 15m window). Throttle on host,SubjectUserName 1h.
+```  - Tuning: allowlist IT/helpdesk accounts and known login-script parents (ParentProcessName). Do NOT raise the
+```    tool count - that is exactly what lets low-and-slow through. For slower operators add a 60m/>=4 tools tier.
+
+index=windows EventCode=4688
+| eval proc=lower(mvindex(split(NewProcessName,"\\"),-1))
+| where proc IN ("net.exe","nltest.exe","whoami.exe","ipconfig.exe","arp.exe","nbtstat.exe")
+| where NOT match(SubjectUserName,"\$$") AND MandatoryLabel!="S-1-16-12288" AND MandatoryLabel!="S-1-16-16384"
+| eval cmd=lower(CommandLine)
+| eval domain_hit=if(match(cmd,"/domain|domain_trusts|trusted_domains|dclist|dsgetdc|domain admins|enterprise admins"),1,0)
+| sort 0 host SubjectUserName _time
+| streamstats time_window=15m dc(proc) as distinct_tools sum(domain_hit) as domain_cmds values(proc) as tools values(CommandLine) as cmds by host SubjectUserName
+| where distinct_tools>=3 AND domain_cmds>=1
+| stats min(_time) as first_seen max(_time) as last_seen max(distinct_tools) as distinct_tools max(domain_cmds) as domain_cmds values(tools) as tools values(cmds) as cmds by host SubjectUserName
+| convert ctime(first_seen) ctime(last_seen)
+| sort - distinct_tools

@@ -1,0 +1,26 @@
+``` DET-023 - Registry Run Key Persistence (T1547.001)
+``` Saved search / report Title: "DET-023 - Registry Run Key Persistence (T1547.001)"
+``` Written by Claude (cloud) acting as a detection engineer over Splunk MCP, 2026-10-30 (Eval 04).
+``` Validated against 7 days of lab data (Oct 23-30): fires on the one malicious write
+``` (reg.exe -> HKU\<SID>\...\Run\Atomic Red Team, 2026-10-30 09:21:30) and on nothing else.
+``` Notes:
+```  - Classification-based, not volume-based: persistence is a one-shot action, so one event is enough.
+```  - HKCU writes appear in Sysmon EID 13 as HKU\<SID>\..., NOT HKCU\... - a filter on "HKCU*" alone misses them.
+```  - Exclusions key on Image AND payload, never Image alone: AppData is user-writable, so an Image-only
+```    exclusion there would let malware dropped at that path go silent.
+```  - severity: high = LOLBin writer (reg/powershell/cmd/...) or risky payload; medium = any HKLM; low = other HKCU.
+```  - Tuning: after a baseline, move the exclusion pairs (Image + value/payload) into a lookup. Known FP writers:
+```    Teams, Zoom, Spotify, Discord, GPU/vendor update agents. Route low-severity HKCU to a daily report, not a page.
+
+index=sysmon EventCode=13 (TargetObject="*\\CurrentVersion\\Run\\*" OR TargetObject="*\\CurrentVersion\\RunOnce\\*")
+| eval reg_value=mvindex(split(TargetObject,"\\"),-1)
+| eval hive=case(match(TargetObject,"^(HKU|HKCU)"),"HKCU", match(TargetObject,"^HKLM"),"HKLM", true(),"other")
+| where NOT (
+    (match(Image,"(?i)^C:\\\\Program Files( \(x86\))?\\\\Microsoft\\\\Edge\\\\Application\\\\msedge\.exe$") AND match(reg_value,"^MicrosoftEdgeAutoLaunch_"))
+    OR (match(Image,"(?i)^C:\\\\Users\\\\[^\\\\]+\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\(Update\\\\)?OneDrive(Setup)?\.exe$") AND match(Details,"(?i)\\\\Microsoft\\\\OneDrive\\\\"))
+  )
+| eval lolbin_writer=if(match(Image,"(?i)\\\\(reg|powershell|pwsh|cmd|wscript|cscript|mshta|rundll32|regsvr32)\.exe$"),1,0)
+| eval risky_payload=if(match(Details,"(?i)\\\\(AppData|Temp|Users\\\\Public|ProgramData)\\\\|powershell|mshta|rundll32|regsvr32|https?://|-enc"),1,0)
+| eval severity=case(lolbin_writer=1 OR risky_payload=1,"high", hive="HKLM","medium", true(),"low")
+| table _time host User hive Image reg_value Details severity
+| sort - _time

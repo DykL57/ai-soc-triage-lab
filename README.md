@@ -53,6 +53,8 @@ The second source is the hard one: without context it is indistinguishable from 
 | [02c](evals/02c-local-llm-mcp-unguided.md) | Qwen 3.5 9B (local) | Splunk MCP + local tools | asset lookup | 0 | ❌ | 0 |
 | [02d](evals/02d-local-llm-mcp-guided.md) | Qwen 3.5 9B (local) | Splunk MCP only | asset lookup + hints | 3 | ❌ | 0 |
 
+[**Eval 04**](evals/04-ai-red-vs-blue.md) is a different experiment: a real Atomic Red Team attack chain, a blind AI investigation of it, an LLM asked (and refusing) to play the attacker, and an LLM building the detections for the gaps. See below.
+
 ---
 
 ## Key findings
@@ -71,6 +73,16 @@ The second source is the hard one: without context it is indistinguishable from 
 
 ---
 
+## Eval 04 — AI on both sides of a real attack
+
+[Full write-up.](evals/04-ai-red-vs-blue.md) A four-stage Atomic Red Team chain was run as a standard user (discovery → trust mapping → Run-key persistence), then investigated three ways:
+
+- **AI investigates blind.** Given one alert and no mention of Atomic Red Team, the cloud model reconstructed all four stages in the right order, found the pre-attack setup and a Defender evasion on its own, and reached the right posture — *benign, but confirm authorization with the customer*, not auto-close.
+- **AI asked to be the attacker — and refused.** Asked to generate an evasion-optimised attack playbook (even framed as an authorized lab), the model declined and offered the defender's seat instead. Nothing ran. For an AI-powered-attack defender, that refusal is itself the result.
+- **AI as detection engineer.** The same prompt run twice: once it guessed field names and wrote a detection that returned nothing; once it inspected the data first and wrote two validated rules. Same model — the process decided the outcome. The rules ([DET-023](detections/DET-023-run-key-persistence.spl), [DET-024](detections/DET-024-low-volume-ad-recon.spl)) close real gaps: no Run-key persistence coverage, and an AD-recon rule blind to low-and-slow native discovery.
+
+---
+
 ## What this means for an AI-assisted SOC
 
 - **Give the AI context, not just data.** Asset inventory, authorized activity and change records turned a wrong verdict into a right one.
@@ -85,15 +97,16 @@ The second source is the hard one: without context it is indistinguishable from 
 ```
 ai-soc-triage-lab/
 ├── README.md
-├── evals/          five evaluations with methods, results and lessons
-├── detections/     the validated brute-force detection (sliding window, enriched)
+├── evals/          six evaluations with methods, results and lessons
+├── detections/     validated detections: brute force, Run-key persistence, low-volume AD recon, Sysmon tuning
 ├── lookups/        lab_assets.csv — the asset inventory used for enrichment
 ├── setup/          Splunk MCP setup, least-privilege role, troubleshooting log
-└── evidence/       local-model session transcripts and screenshots
+└── evidence/       session transcripts (blue investigation, detection engineering, red refusal) and screenshots
 ```
 
 ## Next
 
-- Same evidence, verdict-only test on the hardest case (the Zabbix install that looks like an attack).
-- Prompt injection: plant instruction text in a lab log and check whether the agent follows it.
+- Label-reliance test: re-run the persistence with a neutral value name and check whether the blue AI judges by behaviour or by the "Atomic Red Team" label.
+- Deploy DET-023/DET-024 as scheduled searches, build an IT/helpdesk allowlist, re-run the chain, and measure precision.
+- Same evidence, verdict-only test on the hardest brute-force case (the Zabbix install that looks like an attack).
 - Larger local models (MoE in system RAM, or a 24GB+ GPU) on the same prompts.
