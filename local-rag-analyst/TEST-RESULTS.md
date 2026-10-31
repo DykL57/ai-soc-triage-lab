@@ -32,3 +32,10 @@ difference between an AI you can put in a SOC and one you can't.
   guessing — the two properties a SOC actually needs from an assistant.
 - **Instantly updatable:** add a detection, re-run `ingest.py`, and it knows it — no retraining,
   which is why RAG beats fine-tuning for a knowledge base that changes.
+
+### Follow-up: the gap it found got closed
+
+The Kerberoasting gap the analyst flagged in test 3 was then built out as
+[DET-025](../detections/DET-025-kerberoasting.spl) (Eval 06). Re-running `ingest.py` re-indexes the
+new detection and eval, so the local analyst now answers the same question with the real coverage —
+the tooling chain closing its own loop: the local AI found the gap, the cloud AI built the fix.

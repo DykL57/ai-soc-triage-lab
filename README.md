@@ -53,7 +53,7 @@ The second source is the hard one: without context it is indistinguishable from 
 | [02c](evals/02c-local-llm-mcp-unguided.md) | Qwen 3.5 9B (local) | Splunk MCP + local tools | asset lookup | 0 | ❌ | 0 |
 | [02d](evals/02d-local-llm-mcp-guided.md) | Qwen 3.5 9B (local) | Splunk MCP only | asset lookup + hints | 3 | ❌ | 0 |
 
-[**Eval 04**](evals/04-ai-red-vs-blue.md) and [**Eval 05**](evals/05-label-reliance.md) are a different experiment: a real Atomic Red Team attack chain, a blind AI investigation of it, an LLM asked (and refusing) to play the attacker, an LLM building the detections for the gaps, and a test of whether the AI judges by behaviour or by a reassuring label. See below.
+[**Evals 04–06**](evals/) are a different experiment: a real Atomic Red Team attack chain, a blind AI investigation of it, an LLM asked (and refusing) to play the attacker, an LLM building the detections for the gaps, a test of whether the AI judges by behaviour or by a reassuring label, and a Kerberoasting (identity) detection built to close a gap the local AI analyst found. See below.
 
 ---
 
@@ -82,6 +82,7 @@ The second source is the hard one: without context it is indistinguishable from 
 - **AI as detection engineer.** The same prompt run twice: once it guessed field names and wrote a detection that returned nothing; once it inspected the data first and wrote two validated rules. Same model — the process decided the outcome. The rules ([DET-023](detections/DET-023-run-key-persistence.spl), [DET-024](detections/DET-024-low-volume-ad-recon.spl)) close real gaps: no Run-key persistence coverage, and an AD-recon rule blind to low-and-slow native discovery.
 - **[Label or behaviour?](evals/05-label-reliance.md)** The same attack re-run with a legitimate-looking value name (`SystemHealthMonitor`) and no "test" markers. The AI flagged the name as *masquerading* (a red flag, not reassurance) and judged the event by behaviour — but reached "benign" by correlating to the morning's test activity still in the SIEM. The lesson: when you evaluate an AI analyst, what's in the search window is part of the experiment.
 - **[A fully local SOC analyst](local-rag-analyst/).** A retrieval-augmented analyst — Qwen 3.5 9B + a local embedding index of this repo, on 8 GB of VRAM, nothing leaving the host. It answers from the lab's own detections and evals with citations, and when asked about a technique the repo doesn't cover (Kerberoasting), it says so instead of inventing one. The privacy half of the local-vs-cloud trade-off, made real.
+- **[Kerberoasting — closing the loop](evals/06-kerberoasting-identity.md).** The local analyst said there was no Kerberoasting coverage, so I ran the attack (T1558.003, an identity technique) and had the cloud model build the detection: [DET-025](detections/DET-025-kerberoasting.spl), two complementary rules + a correlation signal. On the way it re-found a duplicate `IpAddress` field extraction that was silently dropping events. The local AI found the gap; the cloud AI built the fix.
 
 ---
 
@@ -99,8 +100,8 @@ The second source is the hard one: without context it is indistinguishable from 
 ```
 ai-soc-triage-lab/
 ├── README.md
-├── evals/          seven evaluations with methods, results and lessons
-├── detections/     validated detections: brute force, Run-key persistence, low-volume AD recon, Sysmon tuning
+├── evals/          eight evaluations with methods, results and lessons
+├── detections/     validated detections: brute force, Run-key persistence, low-volume AD recon, Kerberoasting, Sysmon tuning
 ├── lookups/        lab_assets.csv — the asset inventory used for enrichment
 ├── setup/          Splunk MCP setup, least-privilege role, troubleshooting log
 ├── local-rag-analyst/  a fully local RAG SOC analyst (Qwen + embeddings) over this repo

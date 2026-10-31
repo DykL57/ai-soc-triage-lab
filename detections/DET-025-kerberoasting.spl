@@ -1,0 +1,62 @@
+``` DET-025 - Kerberoasting (T1558.003)
+``` Two complementary rules + one correlation signal. Built by Claude over Splunk MCP, 2026-10-31
+``` (Eval 06), inspecting real 4769 data first. Validated against the 11:17 test (bob.user -> svc_sql, RC4).
+```
+``` Context: this detection was built to close a gap the local RAG analyst flagged ("no Kerberoasting
+``` coverage"). Requires "Audit Kerberos Service Ticket Operations" enabled on the DC (4769).
+```
+``` Data-pipeline note: IpAddress is extracted TWICE in win_dc (duplicate multivalue), so a plain
+``` replace() returns null and `by src_ip` silently drops events. Use mvindex(IpAddress,0). Worth fixing
+``` at props.conf (same duplicate-extraction issue seen in the brute-force detection).
+``` Baseline note: 4769 auditing was only just enabled, so normal machine-account 4769s had not yet
+``` accumulated. Let benign 4769s flow before trusting thresholds; every 4768 in 30 days was AES256.
+
+``` ---------------------------------------------------------------------------------------------------
+``` Rule 1 - RC4 service ticket for a user SPN account (HIGH fidelity in an all-AES domain)
+``` Saved search / report Title: "DET-025a - Kerberoasting RC4 Service Ticket (T1558.003)"
+``` Schedule every 5 min, earliest=-10m@m latest=-5m@m (the 5-min lag absorbs forwarder delay).
+index=win_dc EventCode=4769 Status=0x0 TicketEncryptionType=0x17
+| eval service=lower(ServiceName),
+       requester=lower(mvindex(split(TargetUserName,"@"),0)),
+       src_ip=replace(mvindex(IpAddress,0),"^::ffff:","")
+| where NOT match(service,"\$$") AND service!="krbtgt" AND NOT like(service,"krbtgt/%")
+| where NOT match(requester,"\$$")
+| fillnull value="unknown" src_ip
+| stats min(_time) as firstTime max(_time) as lastTime count
+        values(service) as services dc(service) as spn_count
+        values(TicketOptions) as ticket_options by requester src_ip
+| convert ctime(firstTime) ctime(lastTime)
+``` Threshold: 1 event - every ticket in this domain is AES, so one RC4 user-SPN ticket is already abnormal.
+``` False positives: legacy/RC4-only service accounts, Java/Linux keytab clients, cross-forest trusts.
+``` Fix the account (grant AES) rather than suppress. Blind spot: an attacker requesting AES is invisible here.
+
+``` ---------------------------------------------------------------------------------------------------
+``` Rule 2 - one account requesting many distinct user SPNs (any encryption) - behavioural backup
+``` Saved search / report Title: "DET-025b - Kerberoasting Mass SPN Requests (T1558.003)"
+``` Schedule every 10 min, earliest=-20m@m latest=-5m@m, dedupe on requester.
+index=win_dc EventCode=4769 Status=0x0
+| eval service=lower(ServiceName),
+       requester=lower(mvindex(split(TargetUserName,"@"),0)),
+       src_ip=replace(mvindex(IpAddress,0),"^::ffff:","")
+| where NOT match(service,"\$$") AND service!="krbtgt" AND NOT like(service,"krbtgt/%")
+| where NOT match(requester,"\$$")
+| bin _time span=10m
+| stats dc(service) as distinct_spns count as tickets values(service) as services
+        values(TicketEncryptionType) as enc_types values(src_ip) as src_ips by _time requester
+| eval rc4_present=if(isnotnull(mvfind(enc_types,"^0x17$")),"yes","no")
+| where distinct_spns>=3
+``` Threshold: >=3 distinct user SPNs in 10 min (educated guess on a thin baseline - run without the
+``` where for 1-2 weeks and set just above the 99th percentile per user). When rc4_present=yes, treat as critical.
+``` Catches AES-based and mass roasting Rule 1 can't see. Misses single-target roasts and throttled requests.
+``` FPs: admin consoles (SSMS to many SQL instances), monitoring/backup accounts, scanners, SCCM, delegation.
+
+``` ---------------------------------------------------------------------------------------------------
+``` Correlation signal (cheap third angle): SPN enumeration from a non-admin host seconds before the request.
+``` Saved search / report Title: "DET-025c - SPN Enumeration (Kerberoast precursor)"
+(index=sysmon EventCode=1) OR (index=windows EventCode=4688)
+    (CommandLine="*setspn*" OR CommandLine="*GetUserSPNs*" OR CommandLine="*KerberosRequestorSecurityToken*"
+     OR CommandLine="*servicePrincipalName*" OR CommandLine="*Rubeus*")
+| eval cmd=coalesce(CommandLine, Process_Command_Line), user=coalesce(User, SubjectUserName)
+| table _time index host user cmd ParentImage
+| sort _time
+``` In the test, `setspn -T lab.local -Q */*` ran on WIN-CL01 ~9 seconds before the RC4 ticket request.
