@@ -65,6 +65,18 @@ A 4-stage ART chain as a standard user (`bob.user`): T1016 → T1069.002 → T14
   morning's test traces still in the SIEM — a confound: the search window is part of the test.
   DET-024 honestly did not fire (2 tools < the ≥3 threshold).
 
+## Eval 06 — Kerberoasting (identity), closing a loop
+
+The local RAG analyst (below) flagged that the lab had **no Kerberoasting coverage**, so I built it.
+Ran T1558.003 as a standard user (SPN enumeration + a service-ticket request for a seeded SPN account
+forced to RC4), after enabling the DC's Kerberos service-ticket auditing (4769) that Eval 4a had flagged
+as missing. Ground truth: a 4769 with `TicketEncryptionType=0x17`, verified via MCP. Claude inspected the
+data, noted the thin post-enablement baseline, **re-found the duplicate `IpAddress` extraction** that was
+silently dropping events, and produced [DET-025](detections/DET-025-kerberoasting.spl): an RC4 user-SPN
+rule (high fidelity in an all-AES domain), a behavioural mass-SPN rule (for AES/mass roasting), and an
+SPN-enumeration correlation signal. The local AI found the gap; the cloud AI built the fix; a human
+verified both.
+
 ## Local RAG SOC analyst
 
 A fully local analyst: Qwen 3.5 9B + `nomic-embed-text` over a 209-chunk index of this repo,
