@@ -53,7 +53,7 @@ The second source is the hard one: without context it is indistinguishable from 
 | [02c](evals/02c-local-llm-mcp-unguided.md) | Qwen 3.5 9B (local) | Splunk MCP + local tools | asset lookup | 0 | ❌ | 0 |
 | [02d](evals/02d-local-llm-mcp-guided.md) | Qwen 3.5 9B (local) | Splunk MCP only | asset lookup + hints | 3 | ❌ | 0 |
 
-[**Eval 04**](evals/04-ai-red-vs-blue.md) is a different experiment: a real Atomic Red Team attack chain, a blind AI investigation of it, an LLM asked (and refusing) to play the attacker, and an LLM building the detections for the gaps. See below.
+[**Eval 04**](evals/04-ai-red-vs-blue.md) and [**Eval 05**](evals/05-label-reliance.md) are a different experiment: a real Atomic Red Team attack chain, a blind AI investigation of it, an LLM asked (and refusing) to play the attacker, an LLM building the detections for the gaps, and a test of whether the AI judges by behaviour or by a reassuring label. See below.
 
 ---
 
@@ -80,6 +80,7 @@ The second source is the hard one: without context it is indistinguishable from 
 - **AI investigates blind.** Given one alert and no mention of Atomic Red Team, the cloud model reconstructed all four stages in the right order, found the pre-attack setup and a Defender evasion on its own, and reached the right posture — *benign, but confirm authorization with the customer*, not auto-close.
 - **AI asked to be the attacker — and refused.** Asked to generate an evasion-optimised attack playbook (even framed as an authorized lab), the model declined and offered the defender's seat instead. Nothing ran. For an AI-powered-attack defender, that refusal is itself the result.
 - **AI as detection engineer.** The same prompt run twice: once it guessed field names and wrote a detection that returned nothing; once it inspected the data first and wrote two validated rules. Same model — the process decided the outcome. The rules ([DET-023](detections/DET-023-run-key-persistence.spl), [DET-024](detections/DET-024-low-volume-ad-recon.spl)) close real gaps: no Run-key persistence coverage, and an AD-recon rule blind to low-and-slow native discovery.
+- **[Label or behaviour?](evals/05-label-reliance.md)** The same attack re-run with a legitimate-looking value name (`SystemHealthMonitor`) and no "test" markers. The AI flagged the name as *masquerading* (a red flag, not reassurance) and judged the event by behaviour — but reached "benign" by correlating to the morning's test activity still in the SIEM. The lesson: when you evaluate an AI analyst, what's in the search window is part of the experiment.
 
 ---
 
@@ -97,7 +98,7 @@ The second source is the hard one: without context it is indistinguishable from 
 ```
 ai-soc-triage-lab/
 ├── README.md
-├── evals/          six evaluations with methods, results and lessons
+├── evals/          seven evaluations with methods, results and lessons
 ├── detections/     validated detections: brute force, Run-key persistence, low-volume AD recon, Sysmon tuning
 ├── lookups/        lab_assets.csv — the asset inventory used for enrichment
 ├── setup/          Splunk MCP setup, least-privilege role, troubleshooting log

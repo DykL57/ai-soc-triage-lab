@@ -31,3 +31,8 @@ index=windows EventCode=4688
 | stats min(_time) as first_seen max(_time) as last_seen max(distinct_tools) as distinct_tools max(domain_cmds) as domain_cmds values(tools) as tools values(cmds) as cmds by host SubjectUserName
 | convert ctime(first_seen) ctime(last_seen)
 | sort - distinct_tools
+
+``` Coverage note (Eval 05): a 2-tool burst (net group /domain + nltest /dclist) stays BELOW the
+```  >=3 distinct-tools threshold and does not fire here. The shortest recon bursts are the hardest
+```  for a count-based rule. Mitigation: pair with the persistence signal (DET-023) in a correlation
+```  search, or add a lower-threshold tier that requires a domain-scope command.
