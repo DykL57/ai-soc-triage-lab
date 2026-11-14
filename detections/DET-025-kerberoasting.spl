@@ -4,6 +4,9 @@
 ```
 ``` Context: this detection was built to close a gap the local RAG analyst flagged ("no Kerberoasting
 ``` coverage"). Requires "Audit Kerberos Service Ticket Operations" enabled on the DC (4769).
+``` Visibility status (2026-11-14, verified live over Splunk MCP): 4769 is still essentially absent -
+``` only 1 event in 90 days across ALL indexes, while 4768 flows normally. Prerequisite UNMET: these
+``` rules cannot fire until 4769 auditing produces events. Tracked as VG-001 in setup/visibility-gaps.md.
 ```
 ``` Data-pipeline note: IpAddress is extracted TWICE in win_dc (duplicate multivalue), so a plain
 ``` replace() returns null and `by src_ip` silently drops events. Use mvindex(IpAddress,0). Worth fixing
